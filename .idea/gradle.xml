@@ -9,6 +9,8 @@
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/sample-mobile" />
+            <option value="$PROJECT_DIR$/sample-wear" />
             <option value="$PROJECT_DIR$/wearprefs" />
           </set>
         </option>

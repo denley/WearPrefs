@@ -1,1 +1,1 @@
-include ':wearprefs'
+include ':wearprefs', ':sample-mobile', ':sample-wear'
