@@ -27,6 +27,7 @@ package wearprefs;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 
@@ -36,6 +37,7 @@ import com.google.android.gms.wearable.DataApi;
 import com.google.android.gms.wearable.DataEvent;
 import com.google.android.gms.wearable.DataEventBuffer;
 import com.google.android.gms.wearable.DataItem;
+import com.google.android.gms.wearable.DataItemBuffer;
 import com.google.android.gms.wearable.DataMap;
 import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.Wearable;
@@ -138,6 +140,31 @@ public final class WearPrefs implements SharedPreferences.OnSharedPreferenceChan
 
     @Override public void onConnected(Bundle bundle) {
         Wearable.DataApi.addListener(mApiClient, this);
+
+        new Thread(){
+            public void run(){
+                copyAllPreferencesToLocal();
+            }
+        }.start();
+    }
+
+    private void copyAllPreferencesToLocal(){
+        for(String path:mSharedPreferenceCache.keySet()) {
+            copyAllPreferencesToLocalForPath(path);
+        }
+    }
+
+    private void copyAllPreferencesToLocalForPath(String path){
+        final SharedPreferences prefs = mSharedPreferenceCache.get(path);
+        final DataItemBuffer buffer = Wearable.DataApi.getDataItems(
+                mApiClient,
+                Uri.parse("wear:" + path))
+                .await();
+
+        if(buffer.getCount() > 0) {
+            final DataMap map = DataMap.fromByteArray(buffer.get(0).getData());
+            loadPrefsFromDataMap(prefs, map);
+        }
     }
 
 
