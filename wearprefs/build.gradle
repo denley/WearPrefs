@@ -1,5 +1,11 @@
 apply plugin: 'com.android.library'
 
+ext {
+    PUBLISH_GROUP_ID = 'me.denley.wearprefs'
+    PUBLISH_ARTIFACT_ID = 'WearPrefs'
+    PUBLISH_VERSION = '1.0'
+}
+
 android {
     compileSdkVersion 21
     buildToolsVersion "20.0.0"
@@ -22,3 +28,5 @@ dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     compile 'com.google.android.gms:play-services-wearable:5.0.77'
 }
+
+apply from: 'android-release-aar.gradle'
