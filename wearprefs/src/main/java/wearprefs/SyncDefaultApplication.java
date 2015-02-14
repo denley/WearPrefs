@@ -1,4 +1,4 @@
-package wearprefs.sample;
+package wearprefs;
 
 //
 // The MIT License (MIT)
@@ -24,9 +24,9 @@ package wearprefs.sample;
 // SOFTWARE.
 //
 
-import wearprefs.WearPrefs;
+import android.app.Application;
 
-public class Application extends android.app.Application {
+public class SyncDefaultApplication extends Application {
 
     @Override public void onCreate() {
         super.onCreate();
@@ -34,4 +34,5 @@ public class Application extends android.app.Application {
         // Initialize WearPrefs for the default SharedPreferences file
         WearPrefs.init(this);
     }
+
 }

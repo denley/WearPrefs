@@ -6,7 +6,7 @@
     <uses-feature android:name="android.hardware.type.watch" />
 
     <application
-        android:name="wearprefs.sample.Application"
+        android:name="wearprefs.SyncDefaultApplication"
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
