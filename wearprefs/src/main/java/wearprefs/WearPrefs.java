@@ -30,6 +30,8 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -42,32 +44,30 @@ import com.google.android.gms.wearable.DataMap;
 import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.Wearable;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 /**
  *
  */
 public final class WearPrefs implements SharedPreferences.OnSharedPreferenceChangeListener, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, DataApi.DataListener {
 
-    /** A preference key to store the DataApi path for each SharedPreferences file */
-    private static final String KEY_PATH = "wearprefs_path";
+    // DataMap key names for transmitting preference values
+    private static final String KEY_FILE_NAME = "file_name";
+    private static final String KEY_KEY = "key";
+    private static final String KEY_VALUE = "value";
 
-    /** The DataApi path for the default SharedPreferences file */
-    private static final String PATH_DEFAULT = "/default_wearprefs";
-
-    /** The DataApi path prefix for non-default SharedPreferences files */
+    // Path prefixes, for constructing datamap paths
+    private static final String PATH_PREFIX_DEFAULT = "/default_wearprefs_";
     private static final String PATH_PREFIX = "/wearprefs_";
+
 
     /**
      * Initializes WearPrefs synchronization for the default SharedPreferences file.
      *
      * @param context   The context containing the SharedPreferences file.
      */
-    public static void init(final Context context){
+    public static void init(@NonNull final Context context){
         getInstance(context).initDefault();
     }
 
@@ -77,7 +77,7 @@ public final class WearPrefs implements SharedPreferences.OnSharedPreferenceChan
      * @param context       The context containing the SharedPreferences file.
      * @param prefsFileName The name of the file to sync.
      */
-    public static void init(final Context context, final String prefsFileName){
+    public static void init(@NonNull final Context context, @NonNull final String prefsFileName){
         getInstance(context).initFor(prefsFileName);
     }
 
@@ -87,7 +87,7 @@ public final class WearPrefs implements SharedPreferences.OnSharedPreferenceChan
     private static WearPrefs sInstance = null;
 
     /** Retrieves the instance singleton, creating it if necessary */
-    private static WearPrefs getInstance(final Context context){
+    private static WearPrefs getInstance(@NonNull final Context context){
         if(sInstance==null){
             sInstance = new WearPrefs(context);
         }
@@ -97,17 +97,17 @@ public final class WearPrefs implements SharedPreferences.OnSharedPreferenceChan
 
 
 
-    private Context context;
+    @NonNull private final Context context;
 
     /**
      * A cache for SharedPreferences objects, so that they may be
      * retrieved by looking up their DataApi path.
      */
-    private final Map<String, SharedPreferences> mSharedPreferenceCache = new HashMap<>();
+    @NonNull private final Map<String, SharedPreferences> mSharedPreferenceCache = new HashMap<>();
 
-    private GoogleApiClient mApiClient;
+    @NonNull private final GoogleApiClient mApiClient;
 
-    private WearPrefs(final Context context){
+    private WearPrefs(@NonNull final Context context){
         this.context = context;
 
         // build and connect to the Wearable API
@@ -121,20 +121,22 @@ public final class WearPrefs implements SharedPreferences.OnSharedPreferenceChan
 
     private void initDefault(){
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        initFor(prefs, PATH_DEFAULT);
+        initFor(prefs, null);
     }
 
-    private void initFor(final String prefsFileName){
+    private void initFor(@NonNull final String prefsFileName){
         final SharedPreferences prefs = context.getSharedPreferences(
                 prefsFileName,
                 Context.MODE_PRIVATE);
 
-        initFor(prefs, PATH_PREFIX + prefsFileName);
+        initFor(prefs, prefsFileName);
     }
 
-    private void initFor(final SharedPreferences prefs, final String path){
-        prefs.edit().putString(KEY_PATH, path).apply();
-        mSharedPreferenceCache.put(path, prefs);
+    private void initFor(@NonNull final SharedPreferences prefs, @Nullable final String prefsFileName){
+        final String pathPrefix = getPathPrefix(prefsFileName);
+
+        prefs.edit().putString(KEY_FILE_NAME, prefsFileName).apply();
+        mSharedPreferenceCache.put(pathPrefix, prefs);
         prefs.registerOnSharedPreferenceChangeListener(this);
     }
 
@@ -149,13 +151,18 @@ public final class WearPrefs implements SharedPreferences.OnSharedPreferenceChan
     }
 
     private void copyAllPreferencesToLocal(){
-        for(String path:mSharedPreferenceCache.keySet()) {
-            copyAllPreferencesToLocalForPath(path);
+        for(String pathPrefix:mSharedPreferenceCache.keySet()) {
+            copyAllPreferencesToLocalForPathPrefix(pathPrefix);
         }
     }
 
-    private void copyAllPreferencesToLocalForPath(String path){
-        final SharedPreferences prefs = mSharedPreferenceCache.get(path);
+    private void copyAllPreferencesToLocalForPathPrefix(String pathPrefix){
+        for(String key:KeySetUtil.getKeySet(mApiClient, pathPrefix)){
+            copyPreferenceToLocal(pathPrefix + key);
+        }
+    }
+
+    private void copyPreferenceToLocal(final String path) {
         final DataItemBuffer buffer = Wearable.DataApi.getDataItems(
                 mApiClient,
                 Uri.parse("wear:" + path))
@@ -163,134 +170,107 @@ public final class WearPrefs implements SharedPreferences.OnSharedPreferenceChan
 
         if(buffer.getCount() > 0) {
             final DataMap map = DataMap.fromByteArray(buffer.get(0).getData());
-            loadPrefsFromDataMap(prefs, map);
+            loadPrefFromDataMap(map);
         }
     }
 
-
     @Override public void onSharedPreferenceChanged(final SharedPreferences sharedPreferences,
-                                                    String key) {
+                                                    final String updatedKey) {
 
         // Ignore path preference changes, this is only used internally
-        if(key.equalsIgnoreCase(KEY_PATH)){
+        if(updatedKey.equalsIgnoreCase(KEY_FILE_NAME)){
             return;
         }
 
         new Thread(){
             public void run(){
-                final String path = sharedPreferences.getString(KEY_PATH, PATH_DEFAULT);
-
-                // Synchronize on the cache, so that data isn't received simultaneously
-                synchronized (mSharedPreferenceCache){
-                    final PutDataMapRequest request = PutDataMapRequest.create(path);
-
-                    // Copy all preferences to a DataMap
-                    final Map<String, ?> prefsMap = sharedPreferences.getAll();
-                    final DataMap dataMap = request.getDataMap();
-                    for(String key:prefsMap.keySet()) {
-                        saveObject(dataMap, key, prefsMap.get(key));
-                    }
-
-                    Wearable.DataApi.putDataItem(
-                            mApiClient,
-                            request.asPutDataRequest());
-                }
+                onSharedPreferenceChangedAsync(sharedPreferences, updatedKey);
             }
         }.start();
+    }
+
+    private void onSharedPreferenceChangedAsync(final SharedPreferences sharedPreferences,
+                                                final String updatedKey) {
+
+        final String fileName = sharedPreferences.getString(KEY_FILE_NAME, null);
+        final String pathPrefix = getPathPrefix(fileName);
+        final String path = pathPrefix + updatedKey;
+
+        // Synchronize on the cache, so that data isn't received simultaneously
+        synchronized (mSharedPreferenceCache){
+            updateValueRemote(sharedPreferences, updatedKey, fileName, path);
+            KeySetUtil.addToKeySet(mApiClient, path, pathPrefix);
+        }
+    }
+
+    private void updateValueRemote(final SharedPreferences sharedPreferences,
+                                   final String key, final String fileName, final String path) {
+        final PutDataMapRequest request = PutDataMapRequest.create(path);
+
+        final Map<String, ?> prefsMap = sharedPreferences.getAll();
+        final DataMap dataMap = request.getDataMap();
+        dataMap.putString(KEY_FILE_NAME, fileName);
+        dataMap.putString(KEY_KEY, key);
+        TypeUtil.saveObject(dataMap, KEY_VALUE, prefsMap.get(key));
+
+        Wearable.DataApi.putDataItem(
+                mApiClient,
+                request.asPutDataRequest());
     }
 
     @Override public void onDataChanged(DataEventBuffer dataEvents) {
         for(DataEvent event:dataEvents){
             final DataItem changedDataItem = event.getDataItem();
-            final String path = changedDataItem.getUri().getPath();
-            final SharedPreferences prefs = mSharedPreferenceCache.get(path);
-
-            if(prefs!=null){
-                final DataMap data = DataMap.fromByteArray(changedDataItem.getData());
-                loadPrefsFromDataMap(prefs, data);
-            }
+            final DataMap data = DataMap.fromByteArray(changedDataItem.getData());
+            loadPrefFromDataMap(data);
         }
     }
 
-    @SuppressLint("CommitPrefEdits")
-    private void loadPrefsFromDataMap(final SharedPreferences prefs, final DataMap data){
+    private void loadPrefFromDataMap(final DataMap data){
         new Thread(){
             public void run(){
-
-                // Synchronize on the cache, so that data isn't sent simultaneously
-                synchronized (mSharedPreferenceCache) {
-                    final SharedPreferences.Editor editor = prefs.edit();
-                    for (String key : data.keySet()) {
-                        saveObject(editor, key, data.get(key));
-                    }
-                    prefs.unregisterOnSharedPreferenceChangeListener(WearPrefs.this);
-
-                    try {
-                        editor.commit();
-                    } finally {
-                        prefs.registerOnSharedPreferenceChangeListener(WearPrefs.this);
-                    }
-                }
+                loadPrefFromDataMapAsync(data);
             }
         }.start();
     }
 
-    /**
-     * Determines the type of the given object and saves it into
-     * the given preference file accordingly
-     */
-    private void saveObject(final SharedPreferences.Editor editor,
-                            final String key,
-                            final Object o){
+    private void loadPrefFromDataMapAsync(@NonNull final DataMap data){
+        final String key = data.get(KEY_KEY);
+        final String fileName = data.getString(KEY_FILE_NAME);
+        final Object value = data.get(KEY_VALUE);
 
-        if(o instanceof String){
-            editor.putString(key, (String)o);
-        }else if(o instanceof Integer){
-            editor.putInt(key, (Integer)o);
-        }else if(o instanceof Boolean){
-            editor.putBoolean(key, (Boolean)o);
-        }else if(o instanceof Long){
-            editor.putLong(key, (Long)o);
-        }else if(o instanceof Float){
-            editor.putFloat(key, (Float)o);
-        }else if(o instanceof ArrayList){
-            final Set asSet = new HashSet();
-            asSet.addAll((ArrayList)o);
+        final SharedPreferences prefs = mSharedPreferenceCache.get(getPathPrefix(fileName));
 
-            editor.putStringSet(key, asSet);
-        }else{
-            throw new IllegalArgumentException("SharedPreferences does not accept "
-                    +o.getClass().getName()+ " objects");
+        if(key==null || prefs==null) {
+            return;
+        }
+
+        // Synchronize on the cache, so that data isn't sent simultaneously
+        synchronized (mSharedPreferenceCache) {
+            saveValueToPrefs(prefs, key, value);
         }
     }
 
-    /** Determines the type of the given object and saves it into the given DataMap accordingly */
-    private void saveObject(final DataMap editor,
-                            final String key,
-                            final Object o){
+    @SuppressLint("CommitPrefEdits")
+    private void saveValueToPrefs(SharedPreferences prefs, String key, Object value){
+        final SharedPreferences.Editor editor = prefs.edit();
+        TypeUtil.saveObject(editor, key, value);
 
-        if(o instanceof String){
-            editor.putString(key, (String)o);
-        }else if(o instanceof Integer){
-            editor.putInt(key, (Integer)o);
-        }else if(o instanceof Boolean){
-            editor.putBoolean(key, (Boolean)o);
-        }else if(o instanceof Long){
-            editor.putLong(key, (Long)o);
-        }else if(o instanceof Float){
-            editor.putFloat(key, (Float)o);
-        }else if(o instanceof Set){
-            final ArrayList asList = new ArrayList();
-            asList.addAll((Set) o);
-            editor.putStringArrayList(key, asList);
-        }else{
-            throw new IllegalArgumentException("SharedPreferences does not accept "
-                    +o.getClass().getName()+ " objects");
+        prefs.unregisterOnSharedPreferenceChangeListener(WearPrefs.this);
+        try {
+            editor.commit();
+        } finally {
+            prefs.registerOnSharedPreferenceChangeListener(WearPrefs.this);
         }
+    }
+
+    private String getPathPrefix(final String fileName) {
+        return fileName==null
+                ?PATH_PREFIX_DEFAULT
+                :(PATH_PREFIX+fileName+"_");
     }
 
     @Override public void onConnectionSuspended(int i) {}
-
     @Override public void onConnectionFailed(ConnectionResult connectionResult) {}
 
 }
