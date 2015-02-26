@@ -33,7 +33,7 @@ public class KeySetUtil {
         return keySet==null?new ArrayList<String>():keySet;
     }
 
-    public static void setKeySet(GoogleApiClient apiClient, String path, ArrayList<String> keySet) {
+    private static void setKeySet(GoogleApiClient apiClient, String path, ArrayList<String> keySet) {
         final PutDataMapRequest request = PutDataMapRequest.create(path);
         final DataMap dataMap = request.getDataMap();
         dataMap.putStringArrayList(KEY_KEY_SET, keySet);

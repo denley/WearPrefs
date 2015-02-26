@@ -41,6 +41,8 @@ import com.google.android.gms.wearable.DataEventBuffer;
 import com.google.android.gms.wearable.DataItem;
 import com.google.android.gms.wearable.DataItemBuffer;
 import com.google.android.gms.wearable.DataMap;
+import com.google.android.gms.wearable.Node;
+import com.google.android.gms.wearable.NodeApi;
 import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.Wearable;
 
@@ -50,7 +52,7 @@ import java.util.Map;
 /**
  *
  */
-public final class WearPrefs implements SharedPreferences.OnSharedPreferenceChangeListener, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, DataApi.DataListener {
+public final class WearPrefs implements SharedPreferences.OnSharedPreferenceChangeListener, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, DataApi.DataListener, NodeApi.NodeListener {
 
     // DataMap key names for transmitting preference values
     private static final String KEY_FILE_NAME = "file_name";
@@ -142,7 +144,16 @@ public final class WearPrefs implements SharedPreferences.OnSharedPreferenceChan
 
     @Override public void onConnected(Bundle bundle) {
         Wearable.DataApi.addListener(mApiClient, this);
+        Wearable.NodeApi.addListener(mApiClient, this);
 
+        new Thread(){
+            public void run(){
+                copyAllPreferencesToLocal();
+            }
+        }.start();
+    }
+
+    @Override public void onPeerConnected(Node node) {
         new Thread(){
             public void run(){
                 copyAllPreferencesToLocal();
@@ -199,7 +210,7 @@ public final class WearPrefs implements SharedPreferences.OnSharedPreferenceChan
         // Synchronize on the cache, so that data isn't received simultaneously
         synchronized (mSharedPreferenceCache){
             updateValueRemote(sharedPreferences, updatedKey, fileName, path);
-            KeySetUtil.addToKeySet(mApiClient, path, pathPrefix);
+            KeySetUtil.addToKeySet(mApiClient, pathPrefix, updatedKey);
         }
     }
 
@@ -270,8 +281,8 @@ public final class WearPrefs implements SharedPreferences.OnSharedPreferenceChan
                 :(PATH_PREFIX+fileName+"_");
     }
 
-    @Override public void onConnectionSuspended(int i) {}
-    @Override public void onConnectionFailed(ConnectionResult connectionResult) {}
-
+    @Override public void onConnectionSuspended(int i) { }
+    @Override public void onConnectionFailed(ConnectionResult connectionResult) { }
+    @Override public void onPeerDisconnected(Node node) { }
 }
 
