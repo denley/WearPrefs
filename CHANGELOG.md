@@ -1,6 +1,10 @@
 # Change Log
 All notable changes to this project will be documented in this file.
 
+## Unrealeased
+### Fixed
+- `DataItemBuffer`s are properly released when no longer needed
+
 ## 1.1.1
 ### Changed
 - Each key/value pair now uses a distinct path in the DataApi. This reduces unnecessary data transmitted between devices.

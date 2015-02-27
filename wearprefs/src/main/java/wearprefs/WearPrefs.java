@@ -179,7 +179,15 @@ public final class WearPrefs implements SharedPreferences.OnSharedPreferenceChan
                 Uri.parse("wear:" + path))
                 .await();
 
-        if(buffer.getCount() > 0) {
+        try {
+            copyPreferenceToLocal(buffer);
+        }finally {
+            buffer.release();
+        }
+    }
+
+    private void copyPreferenceToLocal(DataItemBuffer buffer) {
+        if (buffer.getCount() > 0) {
             final DataMap map = DataMap.fromByteArray(buffer.get(0).getData());
             loadPrefFromDataMap(map);
         }
