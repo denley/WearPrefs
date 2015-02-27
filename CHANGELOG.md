@@ -1,7 +1,7 @@
 # Change Log
 All notable changes to this project will be documented in this file.
 
-## Unrealeased
+## Unreleased
 ### Fixed
 - `DataItemBuffer`s are properly released when no longer needed
 
