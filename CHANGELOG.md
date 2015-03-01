@@ -1,7 +1,7 @@
 # Change Log
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 1.1.2 - 2015-03-02
 ### Fixed
 - `DataItemBuffer`s are properly released when no longer needed
 
