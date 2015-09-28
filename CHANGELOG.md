@@ -1,6 +1,10 @@
 # Change Log
 All notable changes to this project will be documented in this file.
 
+## 1.1.3 - 2015-09-28
+### Fixed
+- Updated Google Play Services Library dependency version to fix breaking transitive dependency in version 8.1
+
 ## 1.1.2 - 2015-03-02
 ### Fixed
 - `DataItemBuffer`s are properly released when no longer needed
